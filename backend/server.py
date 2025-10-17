@@ -28,11 +28,12 @@ if not LOCAL_TEST:
     BUCKET_NAME = os.getenv("BUCKET_NAME", "photobooth-images")
 
     minio_client = Minio(
-        MINIO_ENDPOINT,
-        access_key=MINIO_ACCESS_KEY,
-        secret_key=MINIO_SECRET_KEY,
-        secure=False
-    )
+    os.getenv("MINIO_ENDPOINT").replace("http://", "").replace("https://", ""),
+    access_key=os.getenv("MINIO_ACCESS_KEY"),
+    secret_key=os.getenv("MINIO_SECRET_KEY"),
+    secure=os.getenv("MINIO_ENDPOINT").startswith("https")
+)
+
 
     try:
         if not minio_client.bucket_exists(BUCKET_NAME):

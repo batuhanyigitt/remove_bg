@@ -31,7 +31,7 @@ if not LOCAL_TEST:
         MINIO_ENDPOINT,
         access_key=MINIO_ACCESS_KEY,
         secret_key=MINIO_SECRET_KEY,
-        secure=True
+        secure=False
     )
 
     try:

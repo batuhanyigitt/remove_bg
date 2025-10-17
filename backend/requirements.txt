@@ -8,3 +8,4 @@ rembg==2.0.67
 numpy<2.0
 minio==7.2.7
 python-dotenv==1.0.1
+onnxruntime==1.19.2

@@ -32,6 +32,7 @@ if not LOCAL_TEST:
     access_key=os.getenv("MINIO_ACCESS_KEY"),
     secret_key=os.getenv("MINIO_SECRET_KEY"),
     secure=os.getenv("MINIO_ENDPOINT").startswith("https")
+    secure=os.getenv("MINIO_SECURE", "False").lower() == "true"
 )
 
 

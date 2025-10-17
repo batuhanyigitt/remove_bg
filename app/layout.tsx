@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "My Persil Photo Booth",
+  title: "Remove Background",
   description: "AI Background Photo Booth App",
 };
 

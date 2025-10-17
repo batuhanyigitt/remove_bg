@@ -1,42 +1,45 @@
 from minio import Minio
-import requests
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from rembg import remove, new_session
 from PIL import Image, ImageDraw, ImageFont
-import io
-import base64
-import os
-import time
-import qrcode
-import platform
-import subprocess
+import io, base64, os, time, qrcode, platform, subprocess
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=".env.local")
 
-
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+
+# ------------------ TEST MODU KONTROLÜ ------------------
+LOCAL_TEST = os.getenv("LOCAL_TEST", "False").lower() == "true"
+
+if LOCAL_TEST:
+    print("🧪 Lokal test modu aktif — MinIO devre dışı.")
+else:
+    print("☁️ Canlı mod — MinIO bağlantısı aktif.")
+
 # ------------------ MINIO BAĞLANTISI ------------------
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "storage.metasoftco.com")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
-BUCKET_NAME = os.getenv("BUCKET_NAME", "photobooth-images")
+if not LOCAL_TEST:
+    MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "storage.metasoftco.com")
+    MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+    MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+    BUCKET_NAME = os.getenv("BUCKET_NAME", "photobooth-images")
 
-minio_client = Minio(
-    MINIO_ENDPOINT,
-    access_key=MINIO_ACCESS_KEY,
-    secret_key=MINIO_SECRET_KEY,
-    secure=True
-)
+    minio_client = Minio(
+        MINIO_ENDPOINT,
+        access_key=MINIO_ACCESS_KEY,
+        secret_key=MINIO_SECRET_KEY,
+        secure=True
+    )
 
-# Eğer bucket yoksa oluştur
-try:
-    if not minio_client.bucket_exists(BUCKET_NAME):
-        minio_client.make_bucket(BUCKET_NAME)
-except Exception as e:
-    print("⚠️ MinIO bucket kontrol hatası:", e)
+    try:
+        if not minio_client.bucket_exists(BUCKET_NAME):
+            minio_client.make_bucket(BUCKET_NAME)
+    except Exception as e:
+        print("⚠️ MinIO bucket kontrol hatası:", e)
+
     
 # ------------------ MODELİ ÖNCEDEN YÜKLE ------------------
 session = new_session()
@@ -135,19 +138,28 @@ def compose():
         qr_y = frame_h - qr_size - 40
         frame.alpha_composite(qr_img, dest=(qr_x, qr_y))
 
-        # 🔹 Görseli MinIO'ya yükle
+        # 🔹 Görseli kaydet veya MinIO'ya yükle
         buffer = io.BytesIO()
         frame.save(buffer, format="PNG")
         buffer.seek(0)
 
-        minio_client.put_object(
-            BUCKET_NAME,
-            filename,
-            buffer,
-            len(buffer.getvalue()),
-            content_type="image/png"
-        )
-        print(f"✅ MinIO'ya yüklendi: {filename}")
+        if LOCAL_TEST:
+            # 💾 Lokal test: sadece gallery klasörüne kaydet
+            local_path = os.path.join(GALLERY_DIR, filename)
+            with open(local_path, "wb") as f:
+                f.write(buffer.getvalue())
+            print(f"🧪 Lokal kaydedildi: {local_path}")
+        else:
+            # ☁️ Canlı: MinIO'ya yükle
+            minio_client.put_object(
+                BUCKET_NAME,
+                filename,
+                buffer,
+                len(buffer.getvalue()),
+                content_type="image/png"
+            )
+            print(f"✅ MinIO'ya yüklendi: {filename}")
+
 
 
         # Galeri API'ye gönder

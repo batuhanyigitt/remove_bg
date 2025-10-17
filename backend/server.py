@@ -57,35 +57,37 @@ os.makedirs(GALLERY_DIR, exist_ok=True)
 @app.route("/remove-bg", methods=["POST"])
 def remove_bg():
     try:
-        data = request.get_json()
+        data = request.get_json(force=True)
         image_base64 = data.get("image")
 
         if not image_base64:
             return jsonify({"error": "Resim eksik"}), 400
 
-        # Güvenli decode
+        # 📸 Base64 temizle
         if "," in image_base64:
             image_data = base64.b64decode(image_base64.split(",")[1])
         else:
             image_data = base64.b64decode(image_base64)
 
         image = Image.open(io.BytesIO(image_data)).convert("RGBA")
-        image.thumbnail((1024, 1024))
 
-        # 🔥 MODEL HER SEFERİNDE YENİDEN YÜKLENMEZ
+        print("🧠 Model çalıştırılıyor...")
         output = remove(image, session=session)
+        print("✅ Arka plan temizlendi")
 
         buffer = io.BytesIO()
         output.save(buffer, format="PNG")
-        processed_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        processed_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-        return jsonify({"image": f"data:image/png;base64,{processed_base64}"})
+        return jsonify({
+            "image": f"data:image/png;base64,{processed_b64}"
+        })
+
     except Exception as e:
+        import traceback
         print("❌ Remove BG Error:", e)
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
-
-
 # ------------------ FOTOĞRAF + FRAME + QR + GALERİ ------------------
 @app.route("/compose", methods=["POST"])
 def compose():

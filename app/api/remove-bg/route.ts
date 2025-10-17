@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 
-const BG_URL = process.env.BG_SERVER_URL!; // .env.local'daki URL
-
 export async function POST(req: Request) {
   try {
     const { image } = await req.json();
@@ -10,41 +8,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Resim eksik" }, { status: 400 });
     }
 
-    // Base64 formatını normalize et
-    let imageBase64 = typeof image === "string" ? image : "";
-    if (!imageBase64.startsWith("data:image")) {
-      imageBase64 = `data:image/png;base64,${imageBase64}`;
+    // ✅ ENV üzerinden backend adresini oku
+    const backend = process.env.INTERNAL_BG_URL;
+    if (!backend) {
+      return NextResponse.json(
+        { error: "INTERNAL_BG_URL tanımlı değil" },
+        { status: 500 }
+      );
     }
 
-    // Flask backend’e istek
-    const res = await fetch(BG_URL, {
+    // ✅ Flask endpoint’i oluştur
+    const apiUrl = `${backend}/remove-bg`;
+
+    // ✅ Flask’a POST isteği gönder
+    const res = await fetch(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: imageBase64 }),
+      body: JSON.stringify({ image }),
     });
 
-    let data;
-    try {
-      data = await res.json();
-    } catch {
-      const text = await res.text();
-      throw new Error(`Yanıt JSON değil: ${text}`);
-    }
+    const text = await res.text();
 
+    // ❌ Flask hata döndürürse
     if (!res.ok) {
-      throw new Error(data?.error || `Flask hata kodu: ${res.status}`);
+      console.error("❌ Flask Hatası:", text);
+      return NextResponse.json({ error: text }, { status: res.status });
     }
 
-    return NextResponse.json(data);
-  } catch (err: unknown) {
+    // ✅ Flask JSON döndürürse direkt ilet
+    return new NextResponse(text, {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
     console.error("❌ Remove BG Error:", err);
-
-    // 'err' tipini güvenli biçimde işleyelim:
-    let msg = "Arka plan temizleme başarısız.";
-    if (err instanceof Error && err.message) {
-      msg = err.message;
-    }
-
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const message =
+      err instanceof Error ? err.message : "Arka plan temizleme başarısız.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

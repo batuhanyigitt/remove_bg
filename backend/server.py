@@ -1,3 +1,4 @@
+from minio import Minio
 import requests
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -10,10 +11,33 @@ import time
 import qrcode
 import platform
 import subprocess
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=".env.local")
+
 
 app = Flask(__name__)
 CORS(app)
+# ------------------ MINIO BAĞLANTISI ------------------
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "storage.metasoftco.com")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+BUCKET_NAME = os.getenv("BUCKET_NAME", "photobooth-images")
 
+minio_client = Minio(
+    MINIO_ENDPOINT,
+    access_key=MINIO_ACCESS_KEY,
+    secret_key=MINIO_SECRET_KEY,
+    secure=True
+)
+
+# Eğer bucket yoksa oluştur
+try:
+    if not minio_client.bucket_exists(BUCKET_NAME):
+        minio_client.make_bucket(BUCKET_NAME)
+except Exception as e:
+    print("⚠️ MinIO bucket kontrol hatası:", e)
+    
 # ------------------ MODELİ ÖNCEDEN YÜKLE ------------------
 session = new_session()
 print("✅ Model önceden yüklendi")
@@ -102,7 +126,7 @@ def compose():
 
         # QR oluştur ve fotoğrafın içine yerleştir
         filename = f"{user_name.replace(' ', '_')}_{int(time.time())}.png"
-        gallery_link = f"https://faceswap.metasoftco.com/galeri/{filename}"
+        gallery_link = f"https://photobooth.metasoftco.com/gallery/{filename}"
         qr_img = qrcode.make(gallery_link).convert("RGBA")
 
         qr_size = int(frame_w * 0.15)
@@ -111,24 +135,35 @@ def compose():
         qr_y = frame_h - qr_size - 40
         frame.alpha_composite(qr_img, dest=(qr_x, qr_y))
 
-        # Galeriye kaydet
-        gallery_path = os.path.join(GALLERY_DIR, filename)
-        frame.save(gallery_path)
+        # 🔹 Görseli MinIO'ya yükle
+        buffer = io.BytesIO()
+        frame.save(buffer, format="PNG")
+        buffer.seek(0)
+
+        minio_client.put_object(
+            BUCKET_NAME,
+            filename,
+            buffer,
+            len(buffer.getvalue()),
+            content_type="image/png"
+        )
+        print(f"✅ MinIO'ya yüklendi: {filename}")
+
 
         # Galeri API'ye gönder
-        try:
-            with open(gallery_path, "rb") as f:
-                files = {"file": (filename, f, "image/png")}
-                payload = {"name": user_name or "Ziyaretçi"}
-                res = requests.post(
-                    "https://faceswap.metasoftco.com/api/upload",
-                    files=files,
-                    data=payload,
-                    timeout=10
-                )
-                print("✅ Galeriye gönderildi:", res.status_code)
-        except Exception as err:
-            print("⚠️ Galeri gönderim hatası:", err)
+        #try:
+        #    with open(gallery_path, "rb") as f:
+        #        files = {"file": (filename, f, "image/png")}
+        #        payload = {"name": user_name or "Ziyaretçi"}
+        #        res = requests.post(
+        #            "https://faceswap.metasoftco.com/api/upload",
+        #            files=files,
+        #            data=payload,
+        #            timeout=10
+        #        )
+        #        print("✅ Galeriye gönderildi:", res.status_code)
+        #except Exception as err:
+        #    print("⚠️ Galeri gönderim hatası:", err)
 
         # Base64 olarak dön
         buffer = io.BytesIO()
@@ -196,7 +231,13 @@ def print_photo():
 # ------------------ GALERİ ------------------
 @app.route("/gallery/<path:filename>")
 def serve_image(filename):
-    return send_from_directory(GALLERY_DIR, filename)
+    try:
+        response = minio_client.get_object(BUCKET_NAME, filename)
+        return send_file(io.BytesIO(response.read()), mimetype="image/png")
+    except Exception as e:
+        print("❌ Görsel çekme hatası:", e)
+        return jsonify({"error": str(e)}), 404
+
 
 
 @app.route("/")

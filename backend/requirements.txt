@@ -6,3 +6,5 @@ colored==2.2.4
 qrcode==7.4.2
 rembg==2.0.67
 numpy<2.0
+minio==7.2.7
+python-dotenv==1.0.1

@@ -5,6 +5,7 @@ from rembg import remove, new_session
 from PIL import Image, ImageDraw, ImageFont
 import io, base64, os, time, qrcode, platform, subprocess
 from dotenv import load_dotenv
+from flask import send_file
 
 load_dotenv(dotenv_path=".env.local")
 
@@ -31,7 +32,7 @@ if not LOCAL_TEST:
         MINIO_ENDPOINT,
         access_key=MINIO_ACCESS_KEY,
         secret_key=MINIO_SECRET_KEY,
-        secure=os.getenv("MINIO_SECURE", "False").lower() == "true"
+        secure=True
     )
 
     try:
@@ -62,9 +63,16 @@ def remove_bg():
         if not image_base64:
             return jsonify({"error": "Resim eksik"}), 400
 
-        image_data = base64.b64decode(image_base64.split(",")[1])
+        # Güvenli decode
+        if "," in image_base64:
+            image_data = base64.b64decode(image_base64.split(",")[1])
+        else:
+            image_data = base64.b64decode(image_base64)
+
         image = Image.open(io.BytesIO(image_data)).convert("RGBA")
         image.thumbnail((1024, 1024))
+
+        # 🔥 MODEL HER SEFERİNDE YENİDEN YÜKLENMEZ
         output = remove(image, session=session)
 
         buffer = io.BytesIO()
@@ -75,6 +83,7 @@ def remove_bg():
     except Exception as e:
         print("❌ Remove BG Error:", e)
         return jsonify({"error": str(e)}), 500
+
 
 
 # ------------------ FOTOĞRAF + FRAME + QR + GALERİ ------------------
@@ -90,7 +99,12 @@ def compose():
             return jsonify({"error": "Resim eksik"}), 400
 
         # Base64 -> Görsel
-        image_data = base64.b64decode(image_base64.split(",")[1])
+        # Güvenli biçimde base64 ayrıştırma
+        if "," in image_base64:
+            image_data = base64.b64decode(image_base64.split(",")[1])
+        else:
+            image_data = base64.b64decode(image_base64)
+
         user_img = Image.open(io.BytesIO(image_data)).convert("RGBA")
 
         # Arka planı sil
@@ -259,4 +273,3 @@ def home():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)
-

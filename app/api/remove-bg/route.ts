@@ -36,10 +36,15 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("❌ Remove BG Error:", err);
-    const msg =
-      err?.message || "Arka plan temizleme başarısız.";
+
+    // 'err' tipini güvenli biçimde işleyelim:
+    let msg = "Arka plan temizleme başarısız.";
+    if (err instanceof Error && err.message) {
+      msg = err.message;
+    }
+
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

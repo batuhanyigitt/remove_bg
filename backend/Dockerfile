@@ -1,19 +1,22 @@
-# Python base image
+# Python 3.10 ortamı
 FROM python:3.10-slim
 
-# Çalışma dizinini ayarla
+# Çalışma dizini oluştur
 WORKDIR /app
 
 # Gereksinimleri kopyala ve kur
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Tüm dosyaları kopyala
+# Diğer dosyaları kopyala
 COPY . .
 
-# Uygulama hangi portta çalışacak
+# Ortam değişkenleri
 ENV PORT=5001
+ENV PYTHONUNBUFFERED=1
+
+# Portu aç
 EXPOSE 5001
 
-# Flask app'i başlat
-CMD ["python", "main.py"]
+# Flask uygulamasını başlat
+CMD ["python", "server.py"]
